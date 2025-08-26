@@ -1,8 +1,5 @@
-streamlit
-gspread
-oauth2client
-google-auth
-google-auth-oauthlib
-google-auth-httplib2
-google-api-python-client
-pandas
+streamlit>=1.36
+gspread>=6.0.0
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.137.0

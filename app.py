@@ -1,26 +1,47 @@
+# app.py
 import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials  # <-- new
 from datetime import datetime
-import base64
-from email.mime.text import MIMEText
-from googleapiclient.discovery import build
-from google.oauth2.credentials import Credentials
 
 # -----------------------------
 # Google Sheets Connection
 # -----------------------------
-def connect_to_sheets(sheet_name):
-    creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(dict(creds_dict), [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
-    ])
-    client = gspread.authorize(creds)
-    return client.open(sheet_name)
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
+
+def connect_to_sheets(sheet_name: str):
+    """
+    Build a gspread client from Streamlit secrets and open the spreadsheet by name.
+    Raises a clear Streamlit error if credentials or sharing are wrong.
+    """
+    try:
+        info = dict(st.secrets["gcp_service_account"])
+    except Exception:
+        st.error("Missing [gcp_service_account] in Secrets. Add your service account JSON there.")
+        st.stop()
+
+    try:
+        creds = Credentials.from_service_account_info(info, scopes=SCOPES)
+        client = gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Could not build Google credentials. Tip: use google-auth, not oauth2client. \n\nDetails: {e}")
+        st.stop()
+
+    try:
+        return client.open(sheet_name)
+    except gspread.SpreadsheetNotFound:
+        st.error(
+            f"Spreadsheet '{sheet_name}' not found.\n\n"
+            "Share your Google Sheet with the service account email shown in Secrets "
+            f"(`{info.get('client_email', 'unknown')}`) and try again."
+        )
+        st.stop()
 
 # -----------------------------
-# Sheet Setup
+# Sheet Setup (unchanged)
 # -----------------------------
 CONTACT_HEADERS = ["Contact ID", "Name", "Email", "Phone", "Company", "Industry",
                    "Status", "Assigned Contractor", "Created Date"]
@@ -47,7 +68,7 @@ def setup_sheets(sheet):
         email_ws.append_row(EMAIL_HEADERS)
 
 # -----------------------------
-# CRUD Helpers
+# CRUD Helpers (unchanged)
 # -----------------------------
 def get_all_contacts(sheet):
     ws = sheet.worksheet("Contacts")
@@ -78,14 +99,13 @@ def log_email(sheet, contact_id, subject, sent_by, status="Sent"):
     return new_id
 
 # -----------------------------
-# Gmail (stub for now)
+# Gmail stub (unchanged)
 # -----------------------------
 def send_email_stub(to_email, subject, body):
-    # For now just simulate sending
     return f"Simulated send to {to_email} with subject '{subject}'"
 
 # -----------------------------
-# Streamlit UI
+# Streamlit UI (unchanged)
 # -----------------------------
 def main():
     st.set_page_config(page_title="Alexandria CRM", layout="wide")
