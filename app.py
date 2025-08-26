@@ -1,7 +1,6 @@
-# app.py
 import streamlit as st
 import gspread
-from google.oauth2.service_account import Credentials  # <-- new
+from google.oauth2.service_account import Credentials
 from datetime import datetime
 
 # -----------------------------
@@ -15,7 +14,6 @@ SCOPES = [
 def connect_to_sheets(sheet_name: str):
     """
     Build a gspread client from Streamlit secrets and open the spreadsheet by name.
-    Raises a clear Streamlit error if credentials or sharing are wrong.
     """
     try:
         info = dict(st.secrets["gcp_service_account"])
@@ -27,7 +25,7 @@ def connect_to_sheets(sheet_name: str):
         creds = Credentials.from_service_account_info(info, scopes=SCOPES)
         client = gspread.authorize(creds)
     except Exception as e:
-        st.error(f"Could not build Google credentials. Tip: use google-auth, not oauth2client. \n\nDetails: {e}")
+        st.error(f"Could not build Google credentials.\n\nDetails: {e}")
         st.stop()
 
     try:
@@ -41,7 +39,7 @@ def connect_to_sheets(sheet_name: str):
         st.stop()
 
 # -----------------------------
-# Sheet Setup (unchanged)
+# Sheet Setup
 # -----------------------------
 CONTACT_HEADERS = ["Contact ID", "Name", "Email", "Phone", "Company", "Industry",
                    "Status", "Assigned Contractor", "Created Date"]
@@ -50,25 +48,25 @@ EMAIL_HEADERS = ["Email ID", "Contact ID", "Subject", "Sent By", "Date", "Status
 
 def setup_sheets(sheet):
     try:
-        contacts_ws = sheet.worksheet("Contacts")
+        sheet.worksheet("Contacts")
     except gspread.exceptions.WorksheetNotFound:
-        contacts_ws = sheet.add_worksheet(title="Contacts", rows="100", cols="10")
-        contacts_ws.append_row(CONTACT_HEADERS)
+        ws = sheet.add_worksheet(title="Contacts", rows="100", cols="10")
+        ws.append_row(CONTACT_HEADERS)
 
     try:
-        notes_ws = sheet.worksheet("Notes")
+        sheet.worksheet("Notes")
     except gspread.exceptions.WorksheetNotFound:
-        notes_ws = sheet.add_worksheet(title="Notes", rows="100", cols="10")
-        notes_ws.append_row(NOTES_HEADERS)
+        ws = sheet.add_worksheet(title="Notes", rows="100", cols="10")
+        ws.append_row(NOTES_HEADERS)
 
     try:
-        email_ws = sheet.worksheet("Email_Log")
+        sheet.worksheet("Email_Log")
     except gspread.exceptions.WorksheetNotFound:
-        email_ws = sheet.add_worksheet(title="Email_Log", rows="100", cols="10")
-        email_ws.append_row(EMAIL_HEADERS)
+        ws = sheet.add_worksheet(title="Email_Log", rows="100", cols="10")
+        ws.append_row(EMAIL_HEADERS)
 
 # -----------------------------
-# CRUD Helpers (unchanged)
+# CRUD Helpers
 # -----------------------------
 def get_all_contacts(sheet):
     ws = sheet.worksheet("Contacts")
@@ -77,6 +75,13 @@ def get_all_contacts(sheet):
 def add_contact(sheet, name, email, phone, company, industry, status, contractor):
     ws = sheet.worksheet("Contacts")
     records = ws.get_all_records(expected_headers=CONTACT_HEADERS)
+    
+    # Enforce uniqueness by email
+    if email:
+        for r in records:
+            if r["Email"] == email:
+                return r["Contact ID"]  # return existing ID
+
     new_id = len(records) + 1
     created_date = datetime.now().strftime("%Y-%m-%d")
     ws.append_row([new_id, name, email, phone, company, industry, status, contractor, created_date])
@@ -99,13 +104,13 @@ def log_email(sheet, contact_id, subject, sent_by, status="Sent"):
     return new_id
 
 # -----------------------------
-# Gmail stub (unchanged)
+# Gmail (stub for now)
 # -----------------------------
 def send_email_stub(to_email, subject, body):
     return f"Simulated send to {to_email} with subject '{subject}'"
 
 # -----------------------------
-# Streamlit UI (unchanged)
+# Streamlit UI
 # -----------------------------
 def main():
     st.set_page_config(page_title="Alexandria CRM", layout="wide")
@@ -158,10 +163,14 @@ def main():
         st.subheader("Send Email to Contact")
         contacts = get_all_contacts(sheet)
         if contacts:
-            contact_options = [f"{c['Contact ID']} - {c['Name']}" for c in contacts]
+            # Deduplicate by email
+            unique_contacts = {c["Email"]: c for c in contacts if c["Email"]}.values()
+            contact_options = [f"{c['Contact ID']} - {c['Name']}" for c in unique_contacts]
+
             choice = st.selectbox("Choose Contact", contact_options)
             contact_id = int(choice.split(" - ")[0])
             contact = next(c for c in contacts if c["Contact ID"] == contact_id)
+
             subject = st.text_input("Subject")
             message_text = st.text_area("Message")
             if st.button("Send Email"):
@@ -176,3 +185,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
